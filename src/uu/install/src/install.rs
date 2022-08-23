@@ -51,6 +51,7 @@ pub struct Behavior {
     strip_program: String,
     create_leading: bool,
     target_dir: Option<String>,
+    unprivileged: bool,
 }
 
 #[derive(Debug)]
@@ -159,6 +160,7 @@ static OPT_STRIP: &str = "strip";
 static OPT_STRIP_PROGRAM: &str = "strip-program";
 static OPT_TARGET_DIRECTORY: &str = "target-directory";
 static OPT_NO_TARGET_DIRECTORY: &str = "no-target-directory";
+static OPT_UNPRIV: &str = "unprivileged";
 static OPT_VERBOSE: &str = "verbose";
 static OPT_PRESERVE_CONTEXT: &str = "preserve-context";
 static OPT_CONTEXT: &str = "context";
@@ -289,6 +291,11 @@ pub fn uu_app<'a>() -> Command<'a> {
 
         )
         .arg(
+            Arg::new(OPT_UNPRIV)
+            .short('U')
+            .long(OPT_UNPRIV)
+            .help("attempt to run install unprivileged, avoiding changing user and group")
+        .arg(
             Arg::new(OPT_VERBOSE)
             .short('v')
             .long(OPT_VERBOSE)
@@ -372,6 +379,7 @@ fn behavior(matches: &ArgMatches) -> UResult<Behavior> {
     let preserve_timestamps = matches.contains_id(OPT_PRESERVE_TIMESTAMPS);
     let compare = matches.contains_id(OPT_COMPARE);
     let strip = matches.contains_id(OPT_STRIP);
+    let unprivileged = matches.contains_id(OPT_UNPRIV);
     if preserve_timestamps && compare {
         show_error!("Options --compare and --preserve-timestamps are mutually exclusive");
         return Err(1.into());
@@ -398,6 +406,7 @@ fn behavior(matches: &ArgMatches) -> UResult<Behavior> {
         ),
         create_leading: matches.contains_id(OPT_CREATE_LEADING),
         target_dir,
+        unprivileged,
     })
 }
 
@@ -664,7 +673,7 @@ fn copy(from: &Path, to: &Path, b: &Behavior) -> UResult<()> {
         return Err(InstallError::ChmodFailed(to.to_path_buf()).into());
     }
 
-    if !b.owner.is_empty() {
+    if !b.owner.is_empty() && !b.unprivileged {
         let meta = match fs::metadata(to) {
             Ok(meta) => meta,
             Err(e) => return Err(InstallError::MetadataFailed(e).into()),
@@ -695,7 +704,7 @@ fn copy(from: &Path, to: &Path, b: &Behavior) -> UResult<()> {
         }
     }
 
-    if !b.group.is_empty() {
+    if !b.group.is_empty() && !b.unprivileged  {
         let meta = match fs::metadata(to) {
             Ok(meta) => meta,
             Err(e) => return Err(InstallError::MetadataFailed(e).into()),
